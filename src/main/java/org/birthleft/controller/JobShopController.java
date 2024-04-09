@@ -1,17 +1,20 @@
 package org.birthleft.controller;
 
 import org.birthleft.exception.FileInvalidSegmentException;
-import org.birthleft.mapper.StringToIntegerMapper;
 import org.birthleft.model.MachineModel;
+import org.birthleft.model.PartModel;
 import org.birthleft.validator.CapacityValidator;
 import org.birthleft.validator.CooldownTimeValidator;
+import org.birthleft.validator.ItemCountValidator;
 
-import javax.crypto.Mac;
-import java.util.*;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.TreeMap;
 
 public class JobShopController {
     private Map<Integer, MachineModel> machines;
-    private Map<Integer, MachineModel> parts;
+    private Map<Integer, PartModel> parts;
 
     public JobShopController(Map<String, Map<Integer, String>> data) {
         this.machines = new HashMap<>();
@@ -28,6 +31,9 @@ public class JobShopController {
                 case "Machine features":
                     processMachineFeatures(entry.getValue());
                     break;
+                case "Part list":
+                    processPartList(entry.getValue());
+                    break;
             }
         }
     }
@@ -37,13 +43,16 @@ public class JobShopController {
             throw new FileInvalidSegmentException(-1, "Invalid available machines! No available machines found!");
         }
         for (Map.Entry<Integer, String> entry : segmentContent.entrySet()) {
-            String[] parts = entry.getValue().split("\\.");
-            if (parts.length != 2) {
+            String[] lineChunks = entry.getValue().split("\\.");
+            if (lineChunks.length != 2) {
                 throw new FileInvalidSegmentException(entry.getKey(), "Invalid available machines! Invalid machine entry!");
             }
             try {
-                Integer machineId = Integer.parseInt(parts[0]);
-                String machineName = parts[1].trim();
+                Integer machineId = Integer.parseInt(lineChunks[0]);
+                String machineName = lineChunks[1].trim();
+                if (machineName.isEmpty()) {
+                    throw new FileInvalidSegmentException(entry.getKey(), "Invalid available machines! Invalid machine name!");
+                }
                 machines.put(machineId, new MachineModel(machineId, machineName, -1, -1));
             } catch (NumberFormatException e) {
                 throw new FileInvalidSegmentException(entry.getKey(), "Invalid available machines! Invalid machine id!");
@@ -78,7 +87,7 @@ public class JobShopController {
                 }
                 MachineModel foundMachine = machines.get(machineId);
 
-                String[] capacityFeature = firstParts[1].split(":");
+                String[] capacityFeature = firstParts[1].trim().split(":");
                 if (capacityFeature.length != 2) {
                     throw new FileInvalidSegmentException(firstLine.getKey(), "Invalid machine features! Invalid capacity feature!");
                 }
@@ -99,7 +108,7 @@ public class JobShopController {
                 if (secondParts.length != 2) {
                     throw new FileInvalidSegmentException(secondLine.getKey(), "Invalid machine features! Invalid feature entry!");
                 }
-                String[] cooldownFeature = secondParts[1].split(":");
+                String[] cooldownFeature = secondParts[1].trim().split(":");
                 if (cooldownFeature.length != 2) {
                     throw new FileInvalidSegmentException(firstLine.getKey(), "Invalid machine features! Invalid capacity feature!");
                 }
@@ -117,6 +126,34 @@ public class JobShopController {
                 throw new FileInvalidSegmentException(firstLine.getKey(), "Invalid machine features! Invalid machine id!");
             }
         }
-        var lol = 0;
+    }
+
+    private void processPartList(Map<Integer, String> segmentContent) {
+        if (segmentContent.isEmpty()) {
+            throw new FileInvalidSegmentException(-1, "Invalid part list! No parts found!");
+        }
+        for (Map.Entry<Integer, String> entry : segmentContent.entrySet()) {
+            String[] lineChunks = entry.getValue().split("\\.");
+            if (lineChunks.length != 2) {
+                throw new FileInvalidSegmentException(entry.getKey(), "Invalid part list! Invalid part entry!");
+            }
+            try {
+                Integer partId = Integer.parseInt(lineChunks[0]);
+                String[] partDetails = lineChunks[1].trim().split("-");
+                if (partDetails.length != 2) {
+                    throw new FileInvalidSegmentException(entry.getKey(), "Invalid part list! Invalid part details!");
+                }
+                String partName = partDetails[0].trim();
+                if (partName.isEmpty()) {
+                    throw new FileInvalidSegmentException(entry.getKey(), "Invalid part list! Invalid part name!");
+                }
+                Integer partQuantity = ItemCountValidator.compute(partDetails[1].trim(), entry.getKey());
+
+
+                parts.put(partId, new PartModel(partId, partName, partQuantity, new HashMap<>()));
+            } catch (NumberFormatException e) {
+                throw new FileInvalidSegmentException(entry.getKey(), "Invalid part list! Invalid part id!");
+            }
+        }
     }
 }
